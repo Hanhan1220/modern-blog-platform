@@ -156,19 +156,39 @@ export const useBlogService = () => {
   // 根据标签获取文章
   const getPostsByTag = async (tagSlug) => {
     try {
+      // 先获取标签ID
+      const { data: tagData, error: tagError } = await supabase
+        .from('tags')
+        .select('id')
+        .eq('slug', tagSlug)
+        .single()
+
+      if (tagError) throw tagError
+      if (!tagData) return []
+
+      // 获取该标签的文章ID
+      const { data: postTagsData, error: postTagsError } = await supabase
+        .from('post_tags')
+        .select('post_id')
+        .eq('tag_id', tagData.id)
+
+      if (postTagsError) throw postTagsError
+      if (postTagsData.length === 0) return []
+
+      // 获取文章详情
+      const postIds = postTagsData.map(pt => pt.post_id)
       const { data, error } = await supabase
         .from('posts')
         .select(`
           *,
-          author:author_id(username, avatar_url),
-          tags:post_tags(tag:tag_id(name, slug))
+          author:author_id(username, avatar_url)
         `)
         .eq('published', true)
-        .eq('tags.tag.slug', tagSlug)
+        .in('id', postIds)
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      return data
+      return data || []
     } catch (error) {
       console.error('Error fetching posts by tag:', error)
       return []
